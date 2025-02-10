@@ -18,9 +18,10 @@ package com.jess.arms.integration;
 import android.app.Activity;
 import android.app.Application;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.app.FragmentActivity;
-import android.support.v4.app.FragmentManager;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentManager;
 
 import com.jess.arms.base.BaseFragment;
 import com.jess.arms.base.delegate.ActivityDelegate;
@@ -72,11 +73,13 @@ public class ActivityLifecycle implements Application.ActivityLifecycleCallbacks
     public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
         //如果 intent 包含了此字段,并且为 true 说明不加入到 list 进行统一管理
         boolean isNotAdd = false;
-        if (activity.getIntent() != null)
+        if (activity.getIntent() != null) {
             isNotAdd = activity.getIntent().getBooleanExtra(AppManager.IS_NOT_ADD_ACTIVITY_LIST, false);
+        }
 
-        if (!isNotAdd)
+        if (!isNotAdd) {
             mAppManager.addActivity(activity);
+        }
 
         //配置ActivityDelegate
         if (activity instanceof IActivity) {
@@ -86,7 +89,7 @@ public class ActivityLifecycle implements Application.ActivityLifecycleCallbacks
                 activityDelegate = new ActivityDelegateImpl(activity);
                 //使用 IntelligentCache.KEY_KEEP 作为 key 的前缀, 可以使储存的数据永久存储在内存中
                 //否则存储在 LRU 算法的存储空间中, 前提是 Activity 使用的是 IntelligentCache (框架默认使用)
-                cache.put(IntelligentCache.KEY_KEEP + ActivityDelegate.ACTIVITY_DELEGATE, activityDelegate);
+                cache.put(IntelligentCache.getKeyOfKeep(ActivityDelegate.ACTIVITY_DELEGATE), activityDelegate);
             }
             activityDelegate.onCreate(savedInstanceState);
         }
@@ -160,19 +163,22 @@ public class ActivityLifecycle implements Application.ActivityLifecycleCallbacks
      */
     private void registerFragmentCallbacks(Activity activity) {
 
-        boolean useFragment = activity instanceof IActivity ? ((IActivity) activity).useFragment() : true;
+        boolean useFragment = !(activity instanceof IActivity) || ((IActivity) activity).useFragment();
         if (activity instanceof FragmentActivity && useFragment) {
 
             //mFragmentLifecycle 为 Fragment 生命周期实现类, 用于框架内部对每个 Fragment 的必要操作, 如给每个 Fragment 配置 FragmentDelegate
             //注册框架内部已实现的 Fragment 生命周期逻辑
             ((FragmentActivity) activity).getSupportFragmentManager().registerFragmentLifecycleCallbacks(mFragmentLifecycle.get(), true);
 
-            if (mExtras.containsKey(IntelligentCache.KEY_KEEP + ConfigModule.class.getName())) {
-                List<ConfigModule> modules = (List<ConfigModule>) mExtras.get(IntelligentCache.KEY_KEEP + ConfigModule.class.getName());
-                for (ConfigModule module : modules) {
-                    module.injectFragmentLifecycle(mApplication, mFragmentLifecycles.get());
+            if (mExtras.containsKey(IntelligentCache.getKeyOfKeep(ConfigModule.class.getName()))) {
+                @SuppressWarnings("unchecked")
+                List<ConfigModule> modules = (List<ConfigModule>) mExtras.get(IntelligentCache.getKeyOfKeep(ConfigModule.class.getName()));
+                if (modules != null) {
+                    for (ConfigModule module : modules) {
+                        module.injectFragmentLifecycle(mApplication, mFragmentLifecycles.get());
+                    }
                 }
-                mExtras.remove(IntelligentCache.KEY_KEEP + ConfigModule.class.getName());
+                mExtras.remove(IntelligentCache.getKeyOfKeep(ConfigModule.class.getName()));
             }
 
             //注册框架外部, 开发者扩展的 Fragment 生命周期逻辑
@@ -186,7 +192,7 @@ public class ActivityLifecycle implements Application.ActivityLifecycleCallbacks
         ActivityDelegate activityDelegate = null;
         if (activity instanceof IActivity) {
             Cache<String, Object> cache = getCacheFromActivity((IActivity) activity);
-            activityDelegate = (ActivityDelegate) cache.get(IntelligentCache.KEY_KEEP + ActivityDelegate.ACTIVITY_DELEGATE);
+            activityDelegate = (ActivityDelegate) cache.get(IntelligentCache.getKeyOfKeep(ActivityDelegate.ACTIVITY_DELEGATE));
         }
         return activityDelegate;
     }
@@ -197,5 +203,4 @@ public class ActivityLifecycle implements Application.ActivityLifecycleCallbacks
         Preconditions.checkNotNull(cache, "%s cannot be null on Activity", Cache.class.getName());
         return cache;
     }
-
 }

@@ -17,18 +17,18 @@ package com.jess.arms.mvp;
 
 import android.app.Activity;
 import android.app.Service;
-import android.arch.lifecycle.Lifecycle;
-import android.arch.lifecycle.LifecycleObserver;
-import android.arch.lifecycle.LifecycleOwner;
-import android.arch.lifecycle.OnLifecycleEvent;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.SupportActivity;
 import android.view.View;
 
+import androidx.core.app.ComponentActivity;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleObserver;
+import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.OnLifecycleEvent;
+
+import com.jess.arms.integration.EventBusManager;
 import com.jess.arms.utils.Preconditions;
 import com.trello.rxlifecycle2.RxLifecycle;
-
-import org.simple.eventbus.EventBus;
 
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.disposables.Disposable;
@@ -47,7 +47,6 @@ import io.reactivex.functions.Action;
 public class BasePresenter<M extends IModel, V extends IView> implements IPresenter, LifecycleObserver {
     protected final String TAG = this.getClass().getSimpleName();
     protected CompositeDisposable mCompositeDisposable;
-
     protected M mModel;
     protected V mRootView;
 
@@ -80,18 +79,19 @@ public class BasePresenter<M extends IModel, V extends IView> implements IPresen
         onStart();
     }
 
-
     @Override
     public void onStart() {
         //将 LifecycleObserver 注册给 LifecycleOwner 后 @OnLifecycleEvent 才可以正常使用
         if (mRootView != null && mRootView instanceof LifecycleOwner) {
             ((LifecycleOwner) mRootView).getLifecycle().addObserver(this);
-            if (mModel!= null && mModel instanceof LifecycleObserver){
+            if (mModel != null && mModel instanceof LifecycleObserver) {
                 ((LifecycleOwner) mRootView).getLifecycle().addObserver((LifecycleObserver) mModel);
             }
         }
-        if (useEventBus())//如果要使用 Eventbus 请将此方法返回 true
-            EventBus.getDefault().register(this);//注册 Eventbus
+        if (useEventBus())//如果要使用 EventBus 请将此方法返回 true
+        {
+            EventBusManager.getInstance().register(this);//注册 EventBus
+        }
     }
 
     /**
@@ -99,11 +99,14 @@ public class BasePresenter<M extends IModel, V extends IView> implements IPresen
      */
     @Override
     public void onDestroy() {
-        if (useEventBus())//如果要使用 Eventbus 请将此方法返回 true
-            EventBus.getDefault().unregister(this);//解除注册 Eventbus
+        if (useEventBus())//如果要使用 EventBus 请将此方法返回 true
+        {
+            EventBusManager.getInstance().unregister(this);//注销 EventBus
+        }
         unDispose();//解除订阅
-        if (mModel != null)
+        if (mModel != null) {
             mModel.onDestroy();
+        }
         this.mModel = null;
         this.mRootView = null;
         this.mCompositeDisposable = null;
@@ -114,7 +117,7 @@ public class BasePresenter<M extends IModel, V extends IView> implements IPresen
      * 所以当您想在 {@link Service} 以及一些自定义 {@link View} 或自定义类中使用 {@code Presenter} 时
      * 您也将不能继续使用 {@link OnLifecycleEvent} 绑定生命周期
      *
-     * @param owner link {@link SupportActivity} and {@link Fragment}
+     * @param owner link {@link ComponentActivity} and {@link Fragment}
      */
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     void onDestroy(LifecycleOwner owner) {
@@ -128,14 +131,17 @@ public class BasePresenter<M extends IModel, V extends IView> implements IPresen
     }
 
     /**
-     * 是否使用 {@link EventBus},默认为使用(true)，
+     * 是否使用 EventBus
+     * Arms 核心库现在并不会依赖某个 EventBus, 要想使用 EventBus, 还请在项目中自行依赖对应的 EventBus
+     * 现在支持两种 EventBus, greenrobot 的 EventBus 和畅销书 《Android源码设计模式解析与实战》的作者 何红辉 所作的 AndroidEventBus
+     * 确保依赖后, 将此方法返回 true, Arms 会自动检测您依赖的 EventBus, 并自动注册
+     * 这种做法可以让使用者有自行选择三方库的权利, 并且还可以减轻 Arms 的体积
      *
-     * @return
+     * @return 返回 {@code true} (默认为使用 {@code true}), Arms 会自动注册 EventBus
      */
     public boolean useEventBus() {
         return true;
     }
-
 
     /**
      * 将 {@link Disposable} 添加到 {@link CompositeDisposable} 中统一管理
@@ -148,7 +154,7 @@ public class BasePresenter<M extends IModel, V extends IView> implements IPresen
         if (mCompositeDisposable == null) {
             mCompositeDisposable = new CompositeDisposable();
         }
-        mCompositeDisposable.add(disposable);//将所有 Disposable 放入集中处理
+        mCompositeDisposable.add(disposable);//将所有 Disposable 放入容器集中处理
     }
 
     /**
@@ -159,6 +165,4 @@ public class BasePresenter<M extends IModel, V extends IView> implements IPresen
             mCompositeDisposable.clear();//保证 Activity 结束时取消所有正在执行的订阅
         }
     }
-
-
 }

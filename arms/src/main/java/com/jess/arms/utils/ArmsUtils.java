@@ -15,15 +15,13 @@
  */
 package com.jess.arms.utils;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
-import android.os.Message;
-import android.support.design.widget.Snackbar;
-import android.support.v7.widget.DefaultItemAnimator;
-import android.support.v7.widget.RecyclerView;
+import android.os.Build;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.SpannedString;
@@ -35,16 +33,17 @@ import android.view.WindowManager;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.material.snackbar.Snackbar;
 import com.jess.arms.base.App;
 import com.jess.arms.di.component.AppComponent;
 import com.jess.arms.integration.AppManager;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-import static com.jess.arms.integration.AppManager.APP_EXIT;
-import static com.jess.arms.integration.AppManager.KILL_ALL;
-import static com.jess.arms.integration.AppManager.SHOW_SNACKBAR;
-import static com.jess.arms.integration.AppManager.START_ACTIVITY;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.RecyclerView;
 
 /**
  * ================================================
@@ -57,7 +56,6 @@ import static com.jess.arms.integration.AppManager.START_ACTIVITY;
  */
 public class ArmsUtils {
     static public Toast mToast;
-
 
     private ArmsUtils() {
         throw new IllegalStateException("you can't instantiate me!");
@@ -82,16 +80,52 @@ public class ArmsUtils {
         v.setHint(new SpannedString(ss)); // 一定要进行转换,否则属性会消失
     }
 
-
     /**
-     * dip转pix
+     * dp 转 px
      *
-     * @param dpValue
-     * @return
+     * @param context {@link Context}
+     * @param dpValue {@code dpValue}
+     * @return {@code pxValue}
      */
-    public static int dip2px(Context context, float dpValue) {
+    public static int dip2px(@NonNull Context context, float dpValue) {
         final float scale = getResources(context).getDisplayMetrics().density;
         return (int) (dpValue * scale + 0.5f);
+    }
+
+    /**
+     * px 转 dp
+     *
+     * @param context {@link Context}
+     * @param pxValue {@code pxValue}
+     * @return {@code dpValue}
+     */
+    public static int pix2dip(@NonNull Context context, int pxValue) {
+        final float scale = getResources(context).getDisplayMetrics().density;
+        return (int) (pxValue / scale + 0.5f);
+    }
+
+    /**
+     * sp 转 px
+     *
+     * @param context {@link Context}
+     * @param spValue {@code spValue}
+     * @return {@code pxValue}
+     */
+    public static int sp2px(@NonNull Context context, float spValue) {
+        final float fontScale = getResources(context).getDisplayMetrics().scaledDensity;
+        return (int) (spValue * fontScale + 0.5f);
+    }
+
+    /**
+     * px 转 sp
+     *
+     * @param context {@link Context}
+     * @param pxValue {@code pxValue}
+     * @return {@code spValue}
+     */
+    public static int px2sp(@NonNull Context context, float pxValue) {
+        final float fontScale = getResources(context).getDisplayMetrics().scaledDensity;
+        return (int) (pxValue / fontScale + 0.5f);
     }
 
     /**
@@ -107,15 +141,6 @@ public class ArmsUtils {
     public static String[] getStringArray(Context context, int id) {
         return getResources(context).getStringArray(id);
     }
-
-    /**
-     * pix转dip
-     */
-    public static int pix2dip(Context context, int pix) {
-        final float densityDpi = getResources(context).getDisplayMetrics().density;
-        return (int) (pix / densityDpi + 0.5f);
-    }
-
 
     /**
      * 从 dimens 中获得尺寸
@@ -154,7 +179,6 @@ public class ArmsUtils {
      *
      * @return
      */
-
     public static String getString(Context context, String strName) {
         return getString(context, getResources(context).getIdentifier(strName, "string", context.getPackageName()));
     }
@@ -169,8 +193,7 @@ public class ArmsUtils {
      */
     public static <T extends View> T findViewByName(Context context, View view, String viewName) {
         int id = getResources(context).getIdentifier(viewName, "id", context.getPackageName());
-        T v = (T) view.findViewById(id);
-        return v;
+        return view.findViewById(id);
     }
 
     /**
@@ -183,8 +206,7 @@ public class ArmsUtils {
      */
     public static <T extends View> T findViewByName(Context context, Activity activity, String viewName) {
         int id = getResources(context).getIdentifier(viewName, "id", context.getPackageName());
-        T v = (T) activity.findViewById(id);
-        return v;
+        return activity.findViewById(id);
     }
 
     /**
@@ -194,8 +216,7 @@ public class ArmsUtils {
      * @return
      */
     public static int findLayout(Context context, String layoutName) {
-        int id = getResources(context).getIdentifier(layoutName, "layout", context.getPackageName());
-        return id;
+        return getResources(context).getIdentifier(layoutName, "layout", context.getPackageName());
     }
 
     /**
@@ -213,6 +234,7 @@ public class ArmsUtils {
      *
      * @param string
      */
+    @SuppressLint("ShowToast")
     public static void makeText(Context context, String string) {
         if (mToast == null) {
             mToast = Toast.makeText(context, string, Toast.LENGTH_SHORT);
@@ -223,30 +245,29 @@ public class ArmsUtils {
 
     /**
      * 使用 {@link Snackbar} 显示文本消息
+     * Arms 已将 com.google.android.material:material 从依赖中移除 (目的是减小 Arms 体积, design 库中含有太多 View)
+     * 因为 Snackbar 在 com.google.android.material:material 库中, 所以如果框架使用者没有自行依赖 com.google.android.material:material
+     * Arms 则会使用 Toast 替代 Snackbar 显示信息, 如果框架使用者依赖了 arms-autolayout 库就不用依赖 com.google.android.material:material 了
+     * 因为在 arms-autolayout 库中已经依赖有 com.google.android.material:material
      *
      * @param text
      */
     public static void snackbarText(String text) {
-        Message message = new Message();
-        message.what = SHOW_SNACKBAR;
-        message.obj = text;
-        message.arg1 = 0;
-        AppManager.post(message);
+        AppManager.getAppManager().showSnackbar(text, false);
     }
 
     /**
      * 使用 {@link Snackbar} 长时间显示文本消息
+     * Arms 已将 com.google.android.material:material 从依赖中移除 (目的是减小 Arms 体积, design 库中含有太多 View)
+     * 因为 Snackbar 在 com.google.android.material:material 库中, 所以如果框架使用者没有自行依赖 com.google.android.material:material
+     * Arms 则会使用 Toast 替代 Snackbar 显示信息, 如果框架使用者依赖了 arms-autolayout 库就不用依赖 com.google.android.material:material 了
+     * 因为在 arms-autolayout 库中已经依赖有 com.google.android.material:material
      *
      * @param text
      */
     public static void snackbarTextWithLong(String text) {
-        Message message = new Message();
-        message.what = SHOW_SNACKBAR;
-        message.obj = text;
-        message.arg1 = 1;
-        AppManager.post(message);
+        AppManager.getAppManager().showSnackbar(text, true);
     }
-
 
     /**
      * 通过资源id获得drawable
@@ -258,31 +279,23 @@ public class ArmsUtils {
         return getResources(context).getDrawable(rID);
     }
 
-
     /**
-     * 跳转界面 1 ,通过 {@link AppManager#startActivity(Class)}
+     * 跳转界面 1, 通过 {@link AppManager#startActivity(Class)}
      *
      * @param activityClass
      */
     public static void startActivity(Class activityClass) {
-        Message message = new Message();
-        message.what = START_ACTIVITY;
-        message.obj = activityClass;
-        AppManager.post(message);
+        AppManager.getAppManager().startActivity(activityClass);
     }
 
     /**
-     * 跳转界面 2 ,通过 {@link AppManager#startActivity(Intent)}
+     * 跳转界面 2, 通过 {@link AppManager#startActivity(Intent)}
      *
      * @param
      */
     public static void startActivity(Intent content) {
-        Message message = new Message();
-        message.what = START_ACTIVITY;
-        message.obj = content;
-        AppManager.post(message);
+        AppManager.getAppManager().startActivity(content);
     }
-
 
     /**
      * 跳转界面 3
@@ -322,7 +335,6 @@ public class ArmsUtils {
         return getResources(context).getDisplayMetrics().heightPixels;
     }
 
-
     /**
      * 获得颜色
      */
@@ -351,12 +363,8 @@ public class ArmsUtils {
     }
 
     public static boolean isEmpty(Object obj) {
-        if (obj == null) {
-            return true;
-        }
-        return false;
+        return obj == null;
     }
-
 
     /**
      * MD5
@@ -368,8 +376,13 @@ public class ArmsUtils {
     public static String encodeToMD5(String string) {
         byte[] hash = new byte[0];
         try {
-            hash = MessageDigest.getInstance("MD5").digest(
-                    string.getBytes("UTF-8"));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                hash = MessageDigest.getInstance("MD5").digest(
+                        string.getBytes(StandardCharsets.UTF_8));
+            } else {
+                hash = MessageDigest.getInstance("MD5").digest(
+                        string.getBytes("UTF-8"));
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -383,7 +396,6 @@ public class ArmsUtils {
         return hex.toString();
     }
 
-
     /**
      * 全屏,并且沉侵式状态栏
      *
@@ -396,7 +408,6 @@ public class ArmsUtils {
         activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
         activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
     }
-
 
     /**
      * 配置 RecyclerView
@@ -429,27 +440,22 @@ public class ArmsUtils {
     }
 
     /**
-     * 远程遥控 {@link AppManager#killAll()}
+     * 执行 {@link AppManager#killAll()}
      */
     public static void killAll() {
-        Message message = new Message();
-        message.what = KILL_ALL;
-        AppManager.post(message);
+        AppManager.getAppManager().killAll();
     }
 
     /**
-     * 远程遥控 {@link AppManager#appExit()}
+     * 执行 {@link AppManager#appExit()}
      */
     public static void exitApp() {
-        Message message = new Message();
-        message.what = APP_EXIT;
-        AppManager.post(message);
+        AppManager.getAppManager().appExit();
     }
 
     public static AppComponent obtainAppComponentFromContext(Context context) {
         Preconditions.checkNotNull(context, "%s cannot be null", Context.class.getName());
-        Preconditions.checkState(context.getApplicationContext() instanceof App, "Application does not implements App");
+        Preconditions.checkState(context.getApplicationContext() instanceof App, "%s must be implements %s", context.getApplicationContext().getClass().getName(), App.class.getName());
         return ((App) context.getApplicationContext()).getAppComponent();
     }
-
 }

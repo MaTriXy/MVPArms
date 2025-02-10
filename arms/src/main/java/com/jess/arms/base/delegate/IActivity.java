@@ -18,9 +18,10 @@ package com.jess.arms.base.delegate;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.v4.app.FragmentManager;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.FragmentManager;
 
 import com.jess.arms.base.BaseActivity;
 import com.jess.arms.base.BaseFragment;
@@ -28,8 +29,6 @@ import com.jess.arms.di.component.AppComponent;
 import com.jess.arms.integration.ActivityLifecycle;
 import com.jess.arms.integration.cache.Cache;
 import com.jess.arms.integration.cache.LruCache;
-
-import org.simple.eventbus.EventBus;
 
 /**
  * ================================================
@@ -61,9 +60,13 @@ public interface IActivity {
     void setupActivityComponent(@NonNull AppComponent appComponent);
 
     /**
-     * 是否使用 {@link EventBus}
+     * 是否使用 EventBus
+     * Arms 核心库现在并不会依赖某个 EventBus, 要想使用 EventBus, 还请在项目中自行依赖对应的 EventBus
+     * 现在支持两种 EventBus, greenrobot 的 EventBus 和畅销书 《Android源码设计模式解析与实战》的作者 何红辉 所作的 AndroidEventBus
+     * 确保依赖后, 将此方法返回 true, Arms 会自动检测您依赖的 EventBus, 并自动注册
+     * 这种做法可以让使用者有自行选择三方库的权利, 并且还可以减轻 Arms 的体积
      *
-     * @return
+     * @return 返回 {@code true}, Arms 会自动注册 EventBus
      */
     boolean useEventBus();
 
@@ -85,9 +88,9 @@ public interface IActivity {
     /**
      * 这个 Activity 是否会使用 Fragment,框架会根据这个属性判断是否注册 {@link FragmentManager.FragmentLifecycleCallbacks}
      * 如果返回{@code false},那意味着这个 Activity 不需要绑定 Fragment,那你再在这个 Activity 中绑定继承于 {@link BaseFragment} 的 Fragment 将不起任何作用
-     * @see ActivityLifecycle#registerFragmentCallbacks (Fragment 的注册过程)
      *
      * @return
+     * @see ActivityLifecycle#registerFragmentCallbacks (Fragment 的注册过程)
      */
     boolean useFragment();
 }

@@ -18,10 +18,15 @@ package com.jess.arms.integration;
 import android.app.Application;
 import android.content.Context;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import com.jess.arms.integration.cache.Cache;
 import com.jess.arms.integration.cache.CacheType;
 import com.jess.arms.mvp.IModel;
 import com.jess.arms.utils.Preconditions;
+
+import java.lang.reflect.Proxy;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -41,8 +46,10 @@ import retrofit2.Retrofit;
  * <a href="https://github.com/JessYanCoding">Follow me</a>
  * ================================================
  */
+@SuppressWarnings("unchecked")
 @Singleton
 public class RepositoryManager implements IRepositoryManager {
+
     @Inject
     Lazy<Retrofit> mRetrofit;
     @Inject
@@ -50,7 +57,10 @@ public class RepositoryManager implements IRepositoryManager {
     @Inject
     Application mApplication;
     @Inject
-    Cache.Factory mCachefactory;
+    Cache.Factory mCacheFactory;
+    @Inject
+    @Nullable
+    ObtainServiceDelegate mObtainServiceDelegate;
     private Cache<String, Object> mRetrofitServiceCache;
     private Cache<String, Object> mCacheServiceCache;
 
@@ -61,19 +71,31 @@ public class RepositoryManager implements IRepositoryManager {
     /**
      * 根据传入的 Class 获取对应的 Retrofit service
      *
-     * @param service
-     * @param <T>
-     * @return
+     * @param serviceClass ApiService class
+     * @param <T>          ApiService class
+     * @return ApiService
      */
+    @NonNull
     @Override
-    public synchronized <T> T obtainRetrofitService(Class<T> service) {
-        if (mRetrofitServiceCache == null)
-            mRetrofitServiceCache = mCachefactory.build(CacheType.RETROFIT_SERVICE_CACHE);
-        Preconditions.checkNotNull(mRetrofitServiceCache, "Cannot return null from a Cache.Factory#build(int) method");
-        T retrofitService = (T) mRetrofitServiceCache.get(service.getCanonicalName());
+    public synchronized <T> T obtainRetrofitService(@NonNull Class<T> serviceClass) {
+        if (mRetrofitServiceCache == null) {
+            mRetrofitServiceCache = mCacheFactory.build(CacheType.RETROFIT_SERVICE_CACHE);
+        }
+        Preconditions.checkNotNull(mRetrofitServiceCache,
+                "Cannot return null from a Cache.Factory#build(int) method");
+        T retrofitService = (T) mRetrofitServiceCache.get(serviceClass.getCanonicalName());
         if (retrofitService == null) {
-            retrofitService = mRetrofit.get().create(service);
-            mRetrofitServiceCache.put(service.getCanonicalName(), retrofitService);
+            if (mObtainServiceDelegate != null) {
+                retrofitService = mObtainServiceDelegate.createRetrofitService(
+                        mRetrofit.get(), serviceClass);
+            }
+            if (retrofitService == null) {
+                retrofitService = (T) Proxy.newProxyInstance(
+                        serviceClass.getClassLoader(),
+                        new Class[]{serviceClass},
+                        new RetrofitServiceProxyHandler(mRetrofit.get(), serviceClass));
+            }
+            mRetrofitServiceCache.put(serviceClass.getCanonicalName(), retrofitService);
         }
         return retrofitService;
     }
@@ -81,19 +103,23 @@ public class RepositoryManager implements IRepositoryManager {
     /**
      * 根据传入的 Class 获取对应的 RxCache service
      *
-     * @param cache
-     * @param <T>
-     * @return
+     * @param cacheClass Cache class
+     * @param <T>        Cache class
+     * @return Cache
      */
+    @NonNull
     @Override
-    public synchronized <T> T obtainCacheService(Class<T> cache) {
-        if (mCacheServiceCache == null)
-            mCacheServiceCache = mCachefactory.build(CacheType.CACHE_SERVICE_CACHE);
-        Preconditions.checkNotNull(mCacheServiceCache, "Cannot return null from a Cache.Factory#build(int) method");
-        T cacheService = (T) mCacheServiceCache.get(cache.getCanonicalName());
+    public synchronized <T> T obtainCacheService(@NonNull Class<T> cacheClass) {
+        Preconditions.checkNotNull(cacheClass, "cacheClass == null");
+        if (mCacheServiceCache == null) {
+            mCacheServiceCache = mCacheFactory.build(CacheType.CACHE_SERVICE_CACHE);
+        }
+        Preconditions.checkNotNull(mCacheServiceCache,
+                "Cannot return null from a Cache.Factory#build(int) method");
+        T cacheService = (T) mCacheServiceCache.get(cacheClass.getCanonicalName());
         if (cacheService == null) {
-            cacheService = mRxCache.get().using(cache);
-            mCacheServiceCache.put(cache.getCanonicalName(), cacheService);
+            cacheService = mRxCache.get().using(cacheClass);
+            mCacheServiceCache.put(cacheClass.getCanonicalName(), cacheService);
         }
         return cacheService;
     }
@@ -103,9 +129,10 @@ public class RepositoryManager implements IRepositoryManager {
      */
     @Override
     public void clearAllCache() {
-        mRxCache.get().evictAll();
+        mRxCache.get().evictAll().subscribe();
     }
 
+    @NonNull
     @Override
     public Context getContext() {
         return mApplication;
